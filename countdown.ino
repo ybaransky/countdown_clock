@@ -25,27 +25,25 @@
 #include <ESP8266WiFi.h>
 #include <WiFiClient.h> 
 #include <ESP8266WebServer.h>
-
 #include <Wire.h> // Enable this line if using Arduino Uno, Mega, etc.
+#include "countdown_clock.h"
+#include "countdown_config.h"
+
+/****************************************************************************/
 
 #define SDA D3
 #define SCL D4
 
-/* Set these to your desired credentials. */
-const char *ssid = "YurijCountdown";
-const char *password = "thereisnospoon";
-int start_time[] = {60, 12, 30, 30, 0}; // dd,hh,mm,ss,uu
+CountdownClock  gCountdown;
+Config          gConfig;
+bool            gTestMode = false;;
 
 std::unique_ptr<ESP8266WebServer> server; 
 extern  void  handleConfig(void);
 extern  void  handleConfigSave(void);
 
-#include "countdown_clock.h"
-CountdownClock  gCountdown;
+/****************************************************************************/
 
-/* Just a little test message.  Go to http://192.168.4.1 in a web browser
- * connected to this access point to see it.
- */
 void handleRoot() {
   server->send(200, "text/html", "<h1>You are connected to the countdown</h1>");
 }
@@ -56,10 +54,15 @@ void setup() {
   Serial.println("");
   Serial.println("Count down clock");
 
+  Serial.println("Loading config file");
+  gConfig.loadFile();
+
   /* You can remove the password parameter if you want the AP to be open. */
-  WiFi.softAP(ssid, password);
-  Serial.print("AP IP address: ");
-  Serial.println(WiFi.softAPIP());
+  WiFi.softAP(gConfig._ap_name, gConfig._ap_password);
+
+  Serial.print("AP IP address: "); Serial.println(WiFi.softAPIP());
+  Serial.print("AP Name: "); Serial.println(gConfig._ap_name);
+  Serial.print("AP Password: "); Serial.println(gConfig._ap_password);
   
   server.reset(new ESP8266WebServer(80));
   server->on("/",     handleConfig);
@@ -67,27 +70,77 @@ void setup() {
   server->begin();
   Serial.println("HTTP server started");
 
-  gCountdown.set_time(start_time);
   gCountdown.begin();
-  gCountdown.print();
-  gCountdown.display();
+  gCountdown.set_time(gConfig._duration);
+  gCountdown.set_message(gConfig._msg_start);
+  gCountdown.displayMessage();
+
+  delay(5000);
+  gCountdown.set_message(gConfig._msg_end);
+  gCountdown.clear();
+}
+
+void  doTestMode(uint32_t currtime) {
+  static  bool      firstTime = true;
+  static  uint32_t  starttime;
+  static  int       save_time[6];
+
+  if (firstTime) {
+    firstTime = false;
+    int new_time[] = {0,0,0,5,0};
+    gCountdown.get_time( save_time );
+    gCountdown.set_time( new_time );
+    starttime = currtime;
+  }
+  // go back to original mode
+  if (currtime - starttime > 10000) {
+    firstTime = true;
+    gTestMode = false;
+    gCountdown.set_time( save_time );
+    gCountdown.decrement( 10000 );
+    gCountdown.clear();
+  }
+}
+ 
+void  doCheckpoint(uint32_t currtime) {
+  static  uint32_t  savetime = millis();
+  if (currtime - savetime < 60000) 
+    return;
+  Serial.printf("%d) saving\n", int(currtime/1000));
+  gCountdown.get_time( gConfig._duration );
+  gConfig.saveFile();
+  savetime = currtime;
 }
 
 void loop() {
-  static uint32  prevtime = millis();
-  static uint16_t  tick = 100;
-  static bool display = true;
+  static  bool      display = true;
+  static  bool      done = false;
+  static  uint16_t  tick = 100;
+  static  uint32_t  prevtime = millis();
+  uint32_t          currtime = millis();
 
   server->handleClient();
 
+  // set time to 5 seconds and then after 10, revert to original
+  if (gTestMode) 
+    doTestMode(currtime);
+
+  // this is the full logic of the clock
   delay(tick);
   if (gCountdown.decrement(tick))
-    gCountdown.display();
+    gCountdown.displayClock();
   else {
-    if (millis() - prevtime > 500) {
-      gCountdown.done_message(display);
-      prevtime = millis();
+    done = true;
+    if (currtime - prevtime > 500) {
+      if (display)
+        gCountdown.displayMessage();
+      else
+        gCountdown.clear();
+      prevtime = currtime;
       display  = !display;
     }
   }
+
+  if (gConfig._periodic_save && !gTestMode && !done)
+    doCheckpoint(currtime);
 }

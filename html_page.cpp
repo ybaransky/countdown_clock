@@ -1,11 +1,14 @@
 #include <Arduino.h>
-#include "countdown_clock.h"
 #include <ESP8266WebServer.h>
-extern  std::unique_ptr<ESP8266WebServer> server; 
-extern  CountdownClock gCountdown;
+#include "countdown_clock.h"
+#include "countdown_config.h"
 
-static const String NL("\r\n");
-static const String EMPTY("");
+extern  std::unique_ptr<ESP8266WebServer> server; 
+extern  CountdownClock  gCountdown;
+extern  Config          gConfig;
+static const String     NL("\r\n");
+static const String     EMPTY("");
+
 static const char STYLE_BUTTON[] PROGMEM = "button {border:0;border-radius:0.3rem;background-color:#1fa3ec;color:#fff;line-height:2.4rem;font-size:1.2rem;width:40%;}" ;
 
 static 
@@ -22,10 +25,41 @@ static
 String configPageInputRow(const char* desc, const String& value) {
   String row("");
   row += "<tr>";
-  //row += "<td style='text-align:right; font-weight:bold'>" + String(name) + "</td><td style='text-align:left'>" + value + "</td>";
   row += "<td class='right border bold grey'>" + String(desc) + "</td><td class='left border'>" + value + "</td>";
   row += "</tr>" + NL;
   return row;
+}
+
+static
+String configPageInputText(const char* id, const char* text, int size=0) 
+{
+  String input = NL;
+  input += "<input ";
+  input += "type='text' ";
+  input += "id='"          + String(id)   + "' ";
+  input += "name='"        + String(id)   + "' ";
+  input += "placeholder='" + String(text) + "' ";
+  if (size) {
+    input += "maxlength="    + String(size) + " ";
+    input += "size="         + String(size) + " ";
+  }
+  input += ">";
+  return input;
+}
+
+static
+String configPageInputCheckbox(const char* id, bool checked=false) 
+{
+  String input = NL;
+  input += "<input ";
+  input += "type='checkbox' ";
+  input += "id='"          + String(id)   + "' ";
+  input += "name='"        + String(id)   + "' ";
+  input += "value='true'";
+  if (checked)
+    input += "checked='checked'";
+  input += "> Every minute";
+  return input;
 }
 
 static 
@@ -72,18 +106,18 @@ void handleConfig(void) {
   // 
   // title of the pag
   //
-  page += "<h3 style='text-align:center; font-weight:bold'>Countdown to<br>Yurij\'s Termination<br><hr></h3>" + NL;
+  page += "<h3 style='text-align:center; font-weight:bold'>Countdown to<br>Something Important<br><hr></h3>" + NL;
 
   //
   // wrap this in a form
   //
   page += "<form method='get' action='save'>" + NL;
 
-  //
-  // the table
-  //
-  //page += "<table width='100%' style='margin: 0px'>" + NL;
+  /*
+   * clock table
+   */
   page += "<table align='center'>" + NL;
+  page += "<caption>Clock Settings</caption>" + NL;
 
   String input_row;
   int time[6];
@@ -101,9 +135,36 @@ void handleConfig(void) {
   input_row = configPageInputNumber("ss", time[3], 0, 59); 
   page += configPageInputRow("Seconds (0-59)", input_row);
 
-  page += "</table>" + NL;
-  page += "<br><br>";
-  page += "<button type='submit' value='Save' >Save</button>"  + NL;
+  input_row = configPageInputText("msg0", gConfig._msg_start, 13); 
+  page += configPageInputRow("Start Message (0-12)", input_row);
+
+  input_row = configPageInputText("msg1", gConfig._msg_end, 13); 
+  page += configPageInputRow("End Message (0-12)", input_row);
+
+  input_row = configPageInputCheckbox("chk", gConfig._periodic_save); 
+  page += configPageInputRow("Periodic Save", input_row);
+
+  page += "</table><br>" + NL;
+
+  /*
+   * access point table
+   */
+  page += "<table align='center'>" + NL;
+  page += "<caption>Access Point Wifi Settings</caption>" + NL;
+  input_row = configPageInputText("apn", gConfig._ap_name, 16); 
+  page += configPageInputRow("AP Name", input_row);
+  input_row = configPageInputText("app", gConfig._ap_password, 16); 
+  page += configPageInputRow("AP Password", input_row);
+  page += "</table><br>" + NL;
+
+  /*
+   * external wifi link
+   */
+  page += "<a href='/wifi' align=center><b>Local Network Wifi Settings</b></a>" + NL;
+
+  page += "<br></br>";
+  page += "<button type='submit' name='btn' value='save' >Save</button>"  + NL;
+  page += "<button type='submit' name='btn' value='test' >Test</button>"  + NL;
   page += "</form>" + NL;
     
   //
@@ -116,45 +177,77 @@ void handleConfig(void) {
 
 void handleConfigSave(void) 
 {
-  String page = "<style type='text/css'>" + NL;
-  page +=         STYLE_BUTTON + NL;
-  page +=       "</style>" + NL;
-    
-  page += String("<h1>") + 
-    "Days="    + server->arg("dd") + "<br>\n" +
-    "Hours="   + server->arg("hh") + "<br>\n" +
-    "Minutes=" + server->arg("mm") + "<br>\n" +
-    "Seconds=" + server->arg("ss") + "<br>\n" +
-    "</h1>\n";
+  String page("");
+  page += "<style type='text/css'>" + NL;
+  page += STYLE_BUTTON + NL;
+  page += "</style>" + NL;
+  page += String("<h1>") + NL;
+  for(int i=0; i<server->args();i++) 
+    page += server->argName(i) + "='" + server->arg(i) + "'<br>" + NL;
+  page += "</h1>" + NL;
+
+  page += "<br><form action='/' method='get'><button>Home</button></form>\n";
       
-  /*
-  String ipaddr = "192.168.4.1/"; // networkAddressStr();
-  String script = "<script>";
-  script += "var timer = setTimeout(function() { window.location=";
-  script += "'http://" + ipaddr + "'}, 3000);";
-  script += "</script>" + NL;
-  page += script;
- */
-  
-  int time[6];
-  gCountdown.get_time(time);
+  int       time[6];
+  bool      changed = false;
+  bool      changedMsg = false;
+  bool      changedTime = false;
+  bool      periodic_save = false;
   for(int i=0; i<server->args();i++) {
     if (server->arg(i).length()) {
-       if (server->argName(i) == "dd") 
-        time[0] = server->arg(i).toInt();
-       else if (server->argName(i) == "hh") 
-        time[1] = server->arg(i).toInt();
-       else if (server->argName(i) == "mm") 
-        time[2] = server->arg(i).toInt();
-       else if (server->argName(i) == "ss") 
-        time[3] = server->arg(i).toInt();
-    } 
-  } 
+      changed = true;
+      if (server->argName(i) == "msg0`") 
+        strlcpy( gConfig._msg_start, server->arg(i).c_str(), sizeof(gConfig._msg_start));
+      else if (server->argName(i) == "msg1`") {
+        changedMsg = true;
+        strlcpy(gConfig._msg_end, server->arg(i).c_str(), sizeof(gConfig._msg_end));
+      }
+      else if (server->argName(i) == "apn`") 
+        strlcpy(gConfig._ap_name, server->arg(i).c_str(), sizeof(gConfig._ap_name));
+      else if (server->argName(i) == "app`") 
+        strlcpy(gConfig._ap_password, server->arg(i).c_str(), sizeof(gConfig._ap_password));
+      else if (server->argName(i) == "chk") {
+        periodic_save = true;
+      }
+      else if (server->argName(i) == "dd") {
 
-  page += "<br><form action='/home' method='get'><button>Home</button></form>\n";
-  
-//    gConfig.print();
-//  gConfig.save();
-  gCountdown.set_time(time);
+        changedTime = true;
+        gConfig._duration[0] = server->arg(i).toInt();
+      }
+      else if (server->argName(i) == "hh") {
+        changedTime = true;
+        gConfig._duration[1] = server->arg(i).toInt();
+      }
+      else if (server->argName(i) == "mm") {
+        changedTime = true;
+        gConfig._duration[2] = server->arg(i).toInt();
+      }
+      else if (server->argName(i) == "ss") {
+        changedTime = true;
+        gConfig._duration[3] = server->arg(i).toInt();
+      }
+    } 
+  }
+  if (gConfig._periodic_save != periodic_save) {
+    changed = true;
+    gConfig._periodic_save = periodic_save;
+  }
+
+  if (changedTime)
+    gCountdown.set_time(gConfig._duration);
+
+  if (changedMsg)
+    gCountdown.set_message(gConfig._msg_end);
+
+
+  if (server->arg("btn").equals("test")) {
+    extern bool gTestMode;
+    gTestMode = true;
+  }
+
+  if (changed) 
+    gConfig.saveFile();
+
+  Serial.println(page);
   server->send(200, "text/html", page);
 }

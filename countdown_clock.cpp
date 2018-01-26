@@ -137,12 +137,63 @@ static const uint16_t alphafonttable[] =  {
   return alphafonttable[uint8_t(c)];
   }
 
+#ifdef YURIJ
+void  CountdownClock::load_defaults(File& file, const char* mode)
+{ 
+  //read configuration from FS json
+  Serial.println("mounting FS...");
 
+  if (!SPIFFS.begin()) {
+    Serial.println("failed to start FileSystem");
+    return false;
+  }
+  
+  if (!SPIFFS.exists(_filename)) { 
+    Serial.printf("can't find file '%s'\n",_filename.c_str());
+    return false;
+  }
+
+  File file = SPIFFS.open(_filename, mode);
+  if (!file) {
+    Serial.printf("failed to open '%s' for more '%s'\n",_filename.c_str(),mode);
+    return false;
+  }
+
+  Serial.printf("openned config file '%s' for mode '%s'\n",_filename.c_str(),mode);
+  return true;
+}
+#endif
 
 void CountdownClock::begin(void) {
+  /*
   _dddd.begin(0x70);
   _hhmm.begin(0x71);
   _ssuu.begin(0x72);
+*/
+  _digits[0].set( &_dddd, 0);
+  _digits[1].set( &_dddd, 1);
+  _digits[2].set( &_dddd, 3);
+  _digits[3].set( &_dddd, 4);
+
+  _digits[4].set( &_hhmm, 0);
+  _digits[5].set( &_hhmm, 1);
+  _digits[6].set( &_hhmm, 3);
+  _digits[7].set( &_hhmm, 4);
+
+  _digits[8].set( &_ssuu, 0);
+  _digits[9].set( &_ssuu, 1);
+  _digits[10].set( &_ssuu, 3);
+  _digits[11].set( &_ssuu, 4);
+
+#ifdef WORK_CLOCK
+  _dddd.begin(0x72);
+  _hhmm.begin(0x70);
+  _ssuu.begin(0x71);
+#else
+  _dddd.begin(0x72);
+  _hhmm.begin(0x71);
+  _ssuu.begin(0x70);
+#endif
 }
 
 void CountdownClock::set_time(int* time) {
@@ -161,6 +212,9 @@ void CountdownClock::get_time(int* time) {
   time[3] = _ss.value();
   time[4] = _uu.value();
 }
+
+void    CountdownClock::set_message(const String& message) {_message = message;}
+String& CountdownClock::get_message(void) { return _message;}
 
 bool CountdownClock::decrement(uint16_t decrement_amount) {
   // are we at zero already so we can't decrement
@@ -194,13 +248,7 @@ bool CountdownClock::decrement(uint16_t decrement_amount) {
   return false;
 }
 
-void CountdownClock::print(void) {
-  _dddd.writeDisplay();
-  _hhmm.writeDisplay();
-  _ssuu.writeDisplay();
-}
-
-void CountdownClock::display(void) {
+void CountdownClock::displayClock(void) {
   int   value;
   bool  changed;
 
@@ -268,8 +316,39 @@ void  CountdownClock::clear(void) {
   _dddd.clear();
   _hhmm.clear();
   _ssuu.clear();
+  writeDisplay();
 }
 
+void  CountdownClock::writeDisplay(void) {
+  _dddd.writeDisplay();
+  _hhmm.writeDisplay();
+  _ssuu.writeDisplay();
+}
+
+static int ctoi(char c) {
+  return c - 48;
+}
+
+void  CountdownClock::displayMessage(void) {
+  clear();
+  int n = _message.length();
+  for(int j=0; j < n; j++) {
+    int i = 12-n + j;
+    char c = _message.charAt(j);
+    if (isDigit(c)) {
+      _digits[i]._segment->writeDigitNum( _digits[i]._index, ctoi(c), false);
+    }
+    else if (isSpace(c)) {
+      ; // skip
+    }
+    else {
+      _digits[i]._segment->writeDigitRaw( _digits[i]._index, asci_mask(c));
+    }
+  }
+  writeDisplay();
+}
+
+/*
 void  CountdownClock::done_message(bool display) {
   _dddd.clear();
   _hhmm.clear();
@@ -279,33 +358,18 @@ void  CountdownClock::done_message(bool display) {
   _ssuu.writeDisplay();
 
   if (display) {
-//    _dddd.writeDigitNum(1, 8, false);
-//    _dddd.writeDigitNum(3, 4, false);
-//    _dddd.writeDigitRaw(1, asci_mask('B'));
-//    _dddd.writeDigitRaw(3, asci_mask('Y'));
-//    _dddd.writeDigitRaw(4, asci_mask('E'));
-    _hhmm.writeDigitRaw(1, asci_mask('O'));
-    _hhmm.writeDigitRaw(3, asci_mask('L'));
-    _hhmm.writeDigitNum(4, 1, false);
-
-    _ssuu.writeDigitRaw(0, asci_mask('U'));
-    _ssuu.writeDigitNum(1, 1, false);
-    _ssuu.writeDigitRaw(3, asci_mask('A'));
-    /*
     _hhmm.writeDigitRaw(1, asci_mask('F'));
     _hhmm.writeDigitRaw(3, asci_mask('U'));
     _hhmm.writeDigitRaw(4, asci_mask('C'));
 
     _ssuu.writeDigitNum(1, 4, false);
-//    _ssuu.writeDigitRaw(1, asci_mask('Y'));
     _ssuu.writeDigitRaw(3, asci_mask('O'));
     _ssuu.writeDigitRaw(4, asci_mask('U'));
-    */
-
   }
 
   _dddd.writeDisplay();
   _hhmm.writeDisplay();
   _ssuu.writeDisplay();
 }
+*/
 
