@@ -1,56 +1,30 @@
 #ifndef COUNTDOWN_CLOCK
 #define COUNTDOWN_CLOCK
 
-#include <Arduino.h>
-#include <Adafruit_GFX.h>
-#include "Adafruit_LEDBackpack.h"
+#include "countdown_config.h"
 
 class CountdownClock {
-
-  struct  SegmentState {
-    int16_t _curr = -1;
-    int16_t _prev = -1;
-
-    bool    changed()         { return _curr != _prev;}
-    bool    sync()            { _prev = _curr;}
-    void    value(int16_t v)  { _curr = v; _prev = -1;}
-    int16_t value()           { return _curr;}
-    void    add(int16_t v)    { _curr += v; }
-  };
-
-  struct SegmentDigit {
-    Adafruit_7segment*  _segment;
-    int                 _index;   // 0,1,3,4
-    void                set(Adafruit_7segment* ptr, int index) {_segment=ptr; _index=index;}
-  };
-
   public:
-    void  begin(void);
+
+    CountdownClock();
+
     void      set_time(int*);
+    void      set_time(int days=0,int hours=0, int minutes=0, int seconds=0, int ms=0);
     void      get_time(int*);
-    void      set_message(const String&);
-    String&   get_message(void);
+    void      set_direction(int);
+    int       get_direction(void);
 
-    bool  decrement(uint16_t);
-    void  displayClock(void);
-    void  displayMessage(void);
-
-    void  clear(void);
-    void  writeDisplay(void);
+    bool      tick(int);  // could be positive or negative
+    bool      done(void);
+    void      print(const char* msg=NULL);
 
   private:
-    Adafruit_7segment   _dddd;
-    Adafruit_7segment   _hhmm;
-    Adafruit_7segment   _ssuu;
-    SegmentDigit        _digits[12];
-
-    SegmentState        _dd;
-    SegmentState        _hh;
-    SegmentState        _mm;
-    SegmentState        _ss;
-    SegmentState        _uu;
-
-    String _message; 
+    bool      update(int&, int&, int, int);
+    //
+    // days, hours, minutes, seconds, tenths
+    int       _time[N_ELEMENTS];
+    int       _direction;  // < 0 is counting down
 };
 
+extern  CountdownClock  gClock;
 #endif
