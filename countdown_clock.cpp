@@ -20,7 +20,9 @@ void  CountdownClock::set_time(int days, int hours, int minutes, int seconds, in
 }
 void  CountdownClock::set_time(int* time) { memcpy(_time, time, N_ELEMENTS*sizeof(int)); }
 void  CountdownClock::get_time(int* time) { memcpy(time, _time, N_ELEMENTS*sizeof(int)); }
-bool  CountdownClock::done(void) { return _time[DAYS] < 0;}
+bool  CountdownClock::done(void) { return 
+  !(_time[MILLIS] || _time[SECONDS] || _time[HOURS] || _time[DAYS]);
+}
 
 bool  CountdownClock::update(int& borrow, int& target, int amount, int modulo) {
   int prev = borrow;
@@ -48,7 +50,7 @@ bool  CountdownClock::tick(int delta) {
         if (update( _time[DAYS], _time[HOURS], 0, 24))
           // check to see if we are out of time0
           if (_time[DAYS] < 0)
-            set_time(-1);
+            set_time(0);
   return true;
 }
 

@@ -42,40 +42,45 @@ WiFiManager       gWifiManager;
 CountdownClock    gClock;
 CountdownDisplay  gDisplay;
 Config            gConfig;
-bool              gTestMode = false;;
-
-extern  void  handleConfigClock(void);
-extern  void  handleConfigHardware(void);
-extern  void  handleConfigSave(void);
+bool              gTestMode = false; // set via HTML
 
 /****************************************************************************/
 
 void  setUserHandlers() {
-  server->on("/",         handleConfigClock);
-  server->on("/clock",    handleConfigClock);
-  server->on("/hardware", handleConfigHardware);
-  server->on("/save",     handleConfigSave);
+  extern  void  handleConfigClock(void);
+  extern  void  handleConfigSave(void);
+  extern  void  handleConfigView(void);
+  extern  void  handleConfigDelete(void);
+  extern  void  handleConfigReboot(void);
+
+  server->on("/",       handleConfigClock);
+  server->on("/clock",  handleConfigClock);
+  server->on("/save",   handleConfigSave);
+  server->on("/view",   handleConfigView);
+  server->on("/delete", handleConfigDelete);
+  server->on("/reboot", handleConfigReboot);
 }
 
 void  doTestMode(uint32_t currtime) {
-  static  bool      firstTime = true;
+  static  bool      inTestMode = false;
   static  uint32_t  starttime;
   static  int       save_time[6];
 
-  if (firstTime) {
-    firstTime = false;
-    int new_time[] = {0,0,0,5,0};
+  if (!inTestMode) {
+    int new_time[] = {0,5,0,0,0}; // uu=0,ss,mm,hh,dd 
+    gDisplay.clear();
     gClock.get_time( save_time );
     gClock.set_time( new_time );
     starttime = currtime;
+    inTestMode = true;
   }
-  // go back to original mode
-  if (currtime - starttime > 10000) {
-    firstTime = true;
-    gTestMode = false;
+  // go back to original mode, after 10 seconds
+  if (inTestMode && (currtime - starttime > 10000)) {
     gClock.set_time( save_time );
     gClock.tick( 10000 );
     gDisplay.clear();
+    inTestMode = false;
+    gTestMode = false;
   }
 }
  
@@ -94,17 +99,24 @@ bool  doCountdown(uint32_t currtime) {
 
   if (currtime - prevtime > 100) {
     uint32_t delta = currtime - prevtime;
-    if (!gClock.done()) {
+    gClock.tick(delta * gConfig._direction);
+    if (gClock.done()) {
+      gDisplay.displayBlinkMessage();
+    } else {
       int time[6];
-      gClock.tick(delta * gConfig._direction);
       gClock.get_time(time);
       gDisplay.displayTime(time);
-    } else {
-      gDisplay.displayBlinkMessage(currtime);
     }
     prevtime = currtime;
   } 
   return gClock.done();
+}
+
+void  reboot(void) {
+//  delay(2000);
+  WiFi.forceSleepBegin();
+  ESP.restart();
+  //digitalWrite(D0, LOW);
 }
 
 //////////////////////////////////////////////////////////////////////////
@@ -115,30 +127,38 @@ void  setup() {
   Serial.println("");
   Serial.println("Count down clock");
 
+  // we we can do a soft reboot
+  pinMode(D0, OUTPUT);
+  digitalWrite(D0,HIGH);
+
   Serial.println("Loading config file");
   gConfig.loadFile();
-  gConfig.print("after loading");
-
-  gConfig._periodic_save = false;
 
   gClock.set_time(gConfig._time);
-  gClock.print("initial");
 
-  gDisplay.set_message(gConfig._msg_end);
   gDisplay.begin();
-  Serial.println("about to Wifi");
-
-/*
+  gDisplay.set_brightness();
   gDisplay.set_message(gConfig._msg_start);
+  gDisplay.displayMessage();
+  delay(2*1000);
+  gDisplay.set_message(gConfig._msg_end);
+  gDisplay.clear();
 
-  gCountdown.displayMessage();
-  delay(4000);
-  gCountdown.set_message(gConfig._msg_end);
-  gCountdown.clear();
-*/
+  /*
+  for(int i=32;i<32+96;i++) {
+    char buf[8];
+    sprintf(buf,"%c",i);
+    String  str(buf);
+    gDisplay.set_message(buf);
+    gDisplay.displayMessage();
+    delay(1000);
+  }
+  */
+
   /*
   * start the WiFi Manager
   */
+  Serial.println("about to Wifi");
 //  WiFi.disconnect();  // this should erase credentials, causes some issue!!!
   Serial.println("after disconnect");
   gWifiManager.setUserHandlers( setUserHandlers ); 

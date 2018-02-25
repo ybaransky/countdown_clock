@@ -1,39 +1,56 @@
 #ifndef COUNTDOWN_CONFIG_H
 #define COUNTDOWN_CONFIG_H
+#define COUNTDOWN_CONFIG_H
 
 #include "ArduinoJson.h"
 
-enum  {DAYS=4, HOURS=3, MINUTES=2, SECONDS=1, MILLIS=0, N_ELEMENTS=5}; 
+enum  {
+  N_SEGMENTS=3, DDDD=2, HHMM=1, SSUU=0,
+  N_ELEMENTS=5, DAYS=4, HOURS=3, MINUTES=2, SECONDS=1, MILLIS=0,
+  N_DIGITS=12,   // 0=right-most
+  N_SEGMENT_NAME=5,
+  };
+
+
+struct  Segment {
+  int     _seg;
+  char    _name[N_SEGMENT_NAME];
+  int     _address;
+  int     _brightness;
+  bool    _visible;
+
+  void    save(JsonObject&) const;
+  void    load(const JsonObject&);
+  void    print(const char* msg=nullptr) const;
+};
 
 struct  Config {
   Config();
-  void  print(const char* msg="");
+  void    save(JsonObject&) const;
+  void    load(const JsonObject&);
 
-  void  save(JsonObject&) const;
-  void  load(const JsonObject&);
-
-  bool  serialize(Print&) const;
-  bool  deserialize(Stream&);
+  bool    serialize(Print&) const;
+  bool    deserialize(Stream&);
   
-  bool  saveFile() const; 
-  bool  loadFile();
+  bool    saveFile() const; 
+  bool    loadFile();
 
-  void  set_time(int*);
-  void  set_visible(bool*);
+  void    print(const char* msg="");
+  void    set_time(int*);
 
-  int   _time[N_ELEMENTS];    // dd,hh,mm,ss,uu
-  bool  _visible[N_ELEMENTS]; // dd,hh,mm,ss,uu
-  char  _msg_start[13];
-  char  _msg_end[13];
+  int     _time[N_ELEMENTS];    // uu=0,ss,mm,hh,dd
+  int     _display_mode;
+  char    _msg_start[N_DIGITS+1];
+  char    _msg_end[N_DIGITS+1];
 
-  int   _brightness;
-  int   _direction;
-  bool  _periodic_save;
-  char  _address[6];    // X-Y-Z
+  Segment _segments[N_SEGMENTS]; // DDDD=2, HHMM=1, SSUU=0
+  int     _direction;
+  bool    _periodic_save;
   
-  char  _ap_name[32];
-  char  _ap_password[64];
+  char    _ap_name[32];
+  char    _ap_password[64];
 
+  String  _filename;  // includes path
 };
 
 extern  Config  gConfig;
